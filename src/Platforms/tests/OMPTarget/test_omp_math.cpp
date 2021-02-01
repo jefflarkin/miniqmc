@@ -19,6 +19,7 @@
 namespace qmcplusplus
 {
 
+#ifndef __NVCOMPILER
 template<typename T>
 void test_modf(T x)
 {
@@ -95,6 +96,7 @@ TEST_CASE("float_point_my_break_up", "[openmp]")
   test_my_modf<double>(1.0);
   test_my_modf<float>(-1.0);
 }
+#endif
 
 template<typename T>
 void test_sin_cos(T x)

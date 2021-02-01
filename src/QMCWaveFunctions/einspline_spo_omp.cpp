@@ -158,7 +158,7 @@ void einspline_spo_omp<T>::evaluate_v(const ParticleSet& P, int iat)
 
 #ifdef ENABLE_OFFLOAD
     #pragma omp target teams distribute num_teams(NumTeams) thread_limit(ChunkSizePerTeam) \
-      map(always, from: psi_ptr[:nSplinesPerBlock])
+      map(from: psi_ptr[:nSplinesPerBlock])
 #else
     #pragma omp parallel for
 #endif
@@ -175,6 +175,9 @@ void einspline_spo_omp<T>::evaluate_v(const ParticleSet& P, int iat)
       for (int ind = 0; ind < last - first; ind++)
         spline2offload::evaluate_v_v2(spline_m, ix, iy, iz, a, b, c, psi_ptr + first, first, ind);
     }
+#ifdef ENABLE_OFFLOAD
+    #pragma omp target update from(psi_ptr[:nSplinesPerBlock])
+#endif
   }
 }
 
@@ -237,9 +240,10 @@ void einspline_spo_omp<T>::evaluateDetRatios(const VirtualParticleSet& VP,
     const auto psiinv_size             = psiinv.size();
 
 #ifdef ENABLE_OFFLOAD
+    #pragma omp target update to(psiinv_ptr [0:psiinv_pos_copy.size()])
     #pragma omp target teams distribute collapse(2) num_teams(nVP* NumTeams) thread_limit(ChunkSizePerTeam) \
-      map(always, to: psiinv_ptr [0:psiinv_pos_copy.size()]) \
-      map(always, from: ratios_private_ptr [0:NumTeams * nVP])
+      map(to: psiinv_ptr [0:psiinv_pos_copy.size()]) \
+      map(from: ratios_private_ptr [0:NumTeams * nVP])
 #else
     #pragma omp parallel for collapse(2)
 #endif
@@ -265,6 +269,9 @@ void einspline_spo_omp<T>::evaluateDetRatios(const VirtualParticleSet& VP,
           sum += offload_scratch_iVP_ptr[j] * psiinv_ptr[i * nSplinesPerBlock_local + j];
         ratios_private_ptr[iVP * NumTeams + team_id] = sum;
       }
+#ifdef ENABLE_OFFLOAD
+    #pragma omp target update to(ratios_private_ptr [0:NumTeams * nVP])
+#endif
 
     // do the reduction manually
     for (int iVP = 0; iVP < nVP; ++iVP)
@@ -310,7 +317,7 @@ void einspline_spo_omp<T>::evaluate_vgh(const ParticleSet& P, int iat)
 
 #ifdef ENABLE_OFFLOAD
     #pragma omp target teams distribute num_teams(NumTeams) thread_limit(ChunkSizePerTeam) \
-    map(always, from: offload_scratch_ptr[:vgh_dim * padded_size])
+    map(from: offload_scratch_ptr[:vgh_dim * padded_size])
 #else
     #pragma omp parallel for
 #endif
@@ -329,6 +336,9 @@ void einspline_spo_omp<T>::evaluate_vgh(const ParticleSet& P, int iat)
         spline2offload::evaluate_vgh_v2(spline_m, ix, iy, iz, a, b, c, da, db, dc, d2a, d2b, d2c,
                                         offload_scratch_ptr + first, padded_size, first, ind);
     }
+#ifdef ENABLE_OFFLOAD
+    #pragma omp target update from( offload_scratch_ptr[:vgh_dim * padded_size])
+#endif
   }
 }
 
@@ -404,9 +414,10 @@ void einspline_spo_omp<T>::multi_evaluate_vgh(const std::vector<SPOSet*>& spo_li
     auto* multi_offload_scratch_ptr = multi_offload_scratch[i].data();
 
 #ifdef ENABLE_OFFLOAD
+    #pragma omp target update to( pos_scratch_ptr[:pos_scratch.size()]) 
     #pragma omp target teams distribute collapse(2) num_teams(nw* NumTeams) thread_limit(ChunkSizePerTeam) \
-      map(always, to: pos_scratch_ptr[:pos_scratch.size()]) \
-      map(always, from: multi_offload_scratch_ptr[:vgh_dim * nw * padded_size])
+      map(to: pos_scratch_ptr[:pos_scratch.size()]) \
+      map(from: multi_offload_scratch_ptr[:vgh_dim * nw * padded_size])
 #else
     #pragma omp parallel for collapse(2)
 #endif
@@ -429,6 +440,9 @@ void einspline_spo_omp<T>::multi_evaluate_vgh(const std::vector<SPOSet*>& spo_li
                                           multi_offload_scratch_ptr + iw * vgh_dim * padded_size + first, padded_size,
                                           first, ind);
       }
+#ifdef ENABLE_OFFLOAD
+    #pragma omp target update from( multi_offload_scratch_ptr[:vgh_dim * nw * padded_size]) 
+#endif
 
     for (size_t iw = 0; iw < nw; iw++)
       std::copy_n(multi_offload_scratch_ptr + iw * vgh_dim * padded_size, padded_size * vgh_dim,

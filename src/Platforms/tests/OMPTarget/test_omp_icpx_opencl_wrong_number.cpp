@@ -29,7 +29,8 @@ void test_icpx_opencl_wrong_number()
   }
 
 
-#pragma omp target data map(y_ptr[:1]) use_device_ptr(y_ptr)
+#pragma omp target data map(y_ptr[:1]) 
+#pragma omp target data use_device_ptr(y_ptr)
   {
     T** y        = reinterpret_cast<T**>(y_ptr);
     T foo_before = 2;
